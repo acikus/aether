@@ -1,0 +1,3 @@
+[workspace]
+members = ["aethc_core", "aethc_cli"]
+resolver = "2"
