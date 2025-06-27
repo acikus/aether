@@ -162,9 +162,9 @@ impl<'a> Lexer<'a> {
         self.bump(1); // closing quote
         if is_bytes {
             let bytes = value.into_bytes();
-            self.make_tok(TokenKind::ByteStr(bytes), self.pos - start + if is_bytes {2} else {2})
+            self.make_tok(TokenKind::ByteStr(bytes), self.pos - start + 2)
         } else {
-            self.make_tok(TokenKind::Str(value), self.pos - start + 2)
+            self.make_tok(TokenKind::Str(value), self.pos - start + 1)
         }
     }
 
