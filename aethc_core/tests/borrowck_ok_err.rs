@@ -20,6 +20,7 @@ fn borrowck_detects_reassignment() {
 
     // Rezolver mora prijaviti tačno 1 grešku zbog x
 
+
     assert_eq!(res_errs.len(), 1, "resolve errs: {res_errs:#?}");
 
     // Borrow-checker ne prijavljuje dodatne greške
