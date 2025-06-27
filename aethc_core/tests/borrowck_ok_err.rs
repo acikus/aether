@@ -9,7 +9,7 @@ fn borrowck_detects_reassignment() {
     let src = r#"
         fn main() {
             let x = 1;
-            let x = 2; // dublikacija – resolve prijavljuje grešku
+            let x = 2; // duplikacija – resolve prijavljuje grešku
             let mut y = 3;
             let y = 4; // OK, prvi je bio mutable
         }
