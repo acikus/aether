@@ -1,0 +1,12 @@
+# Build artifacts
+/target/
+**/target/
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
