@@ -13,5 +13,5 @@ fn duplicate_name_error() {
     let (_hir, errs) = resolve(&module);
     assert_eq!(errs.len(), 1);
     // сада очекујемо следећу поруку:
-    assert!(errs[0].msg.contains("cannot reassign immutable binding"));
+    assert!(errs[0].msg.contains("already defined"));
 }

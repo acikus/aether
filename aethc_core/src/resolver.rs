@@ -137,7 +137,11 @@ impl Cx {
 
                 if let Some(prev) = self.scopes.last().unwrap().get(name) {
                     if !prev.mutable {
-                        // ошибка уже добављена у `insert`, али за сваки случае
+                        // параметар већ постоји као immutable → грешка
+                        self.errors.push(ResolveError {
+                            span: Span::default(),
+                            msg:  format!("already defined `{name}`"),
+                        });
                         return Ok(hir::Stmt::Expr(rhs));
                     }
                 }
