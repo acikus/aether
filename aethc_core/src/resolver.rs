@@ -137,10 +137,12 @@ impl Cx {
 
                 if let Some(prev) = self.scopes.last().unwrap().get(name) {
                     if !prev.mutable {
+
                         // duplicate immutable binding – report an error and do not shadow
                         self.errors.push(ResolveError {
                             span: Span::default(),
                             msg: format!("cannot reassign immutable binding `{name}`"),
+
                         });
                         return Ok(hir::Stmt::Expr(rhs));
                     }
