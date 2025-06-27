@@ -137,17 +137,19 @@ impl Cx {
 
                 if let Some(prev) = self.scopes.last().unwrap().get(name) {
                     if !prev.mutable {
-                        // параметар већ постоји као immutable → грешка
+
+                        // duplicate immutable binding – report an error and do not shadow
                         self.errors.push(ResolveError {
                             span: Span::default(),
-                            msg:  format!("already defined `{name}`"),
+                            msg: format!("cannot reassign immutable binding `{name}`"),
+
                         });
                         return Ok(hir::Stmt::Expr(rhs));
                     }
                 }
 
-                self.insert(name, Symbol{ id, ty:ty.clone(), mutable:*mutable }, Span::default());
-                Ok(hir::Stmt::Let(hir::HirLet{ id, mutable:*mutable, name:name.clone(), ty, init:rhs }))
+                self.insert(name, Symbol { id, ty: ty.clone(), mutable: *mutable }, Span::default());
+                Ok(hir::Stmt::Let(hir::HirLet { id, mutable: *mutable, name: name.clone(), ty, init: rhs }))
             }
             Expr(e) => Ok(hir::Stmt::Expr(self.lower_expr(e)?)),
             Return(opt) => Ok(hir::Stmt::Return(opt.as_ref().map(|e| self.lower_expr(e)).transpose()?)),
