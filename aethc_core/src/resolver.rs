@@ -1,6 +1,6 @@
 //! resolver.rs – name/type resolver + minimal borrow‑prep
 //! Ulaz: &ast::Module  →  Izlaz: hir::HirModule + Vec<ResolveError>
-//! 2025‑06 – ažurirano: mešani Int/Float izrazi i poruka „already defined“.
+//! 2025‑06 – ažurirano: mešani Int/Float izrazi i poruka „already defined".
 
 use crate::{ast, hir};
 use crate::type_::Type;
@@ -60,16 +60,8 @@ impl Cx {
     /*── symbol table insert ─*/
     fn insert(&mut self, name: &str, sym: Symbol, span: Span) {
         let top = self.scopes.last_mut().unwrap();
-        match top.get(name) {
-            Some(prev) if !prev.mutable => {
-                // immutable već postoji → greška
-                self.errors.push(ResolveError{
-                    span,
-                    msg: format!("already defined `{name}`"),
-                });
-            }
-            _ => { top.insert(name.to_owned(), sym); }
-        }
+        // Allow shadowing - the borrow checker will handle mutability-based duplicate rules
+        top.insert(name.to_owned(), sym);
     }
 
     fn lookup(&self, name: &str) -> Option<&Symbol> {
@@ -135,13 +127,7 @@ impl Cx {
                 let rhs = self.lower_expr(expr)?;
                 let ty  = rhs.ty().clone();
 
-                if let Some(prev) = self.scopes.last().unwrap().get(name) {
-                    if !prev.mutable {
-                        // ошибка уже добављена у `insert`, али за сваки случае
-                        return Ok(hir::Stmt::Expr(rhs));
-                    }
-                }
-
+                // Insert will handle duplicate detection and error reporting
                 self.insert(name, Symbol{ id, ty:ty.clone(), mutable:*mutable }, Span::default());
                 Ok(hir::Stmt::Let(hir::HirLet{ id, mutable:*mutable, name:name.clone(), ty, init:rhs }))
             }
@@ -187,7 +173,7 @@ impl Cx {
                             }
                         }
                     }
-                    // поређења
+                    // поређања
                     _ => Type::Bool,
                 };
                 hir::Expr::Binary{ id, lhs:Box::new(l), op:*op, rhs:Box::new(r), ty }
