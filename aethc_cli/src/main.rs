@@ -55,10 +55,13 @@ fn main() {
             aethc_core::codegen::codegen_fn(&mut llcx, "main", &mir);
             let bc_path = "temp.bc";
             aethc_core::codegen::write_ir(&llcx, bc_path);
+            let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
             let _ = Command::new("clang")
                 .arg("-O0")
-                .arg("-no-pie")
                 .arg(bc_path)
+                .arg("-L")
+                .arg(format!("target/{}", profile))
+                .arg("-laethc_runtime")
                 .arg("-o")
                 .arg(&out)
                 .status();

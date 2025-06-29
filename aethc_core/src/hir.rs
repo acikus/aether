@@ -7,6 +7,11 @@ use crate::type_::Type;
 
 pub type NodeId = u32; // simple counter assigned by resolver
 
+#[derive(Debug, Clone)]
+pub enum Builtin {
+    Print,
+}
+
 /*─────────── HIR root ───────────*/
 #[derive(Debug, Clone)]
 pub struct HirModule {
@@ -94,6 +99,11 @@ pub enum Expr {
         value: String,
         ty: Type,
     },
+    Builtin {
+        id: NodeId,
+        kind: Builtin,
+        ty: Type,
+    },
     Call {
         id: NodeId,
         callee: Box<Expr>,
@@ -126,6 +136,7 @@ impl Expr {
             | Bool { ty, .. }
             | Unit { ty, .. }
             | Str { ty, .. }
+            | Builtin { ty, .. }
             | Call { ty, .. }
             | Unary { ty, .. }
             | Binary { ty, .. } => ty,

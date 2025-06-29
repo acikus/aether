@@ -24,6 +24,22 @@ pub fn new_module(name: &str) -> LlvmCtx {
     let ctx = Context::create();
     let module = ctx.create_module(name);
     let builder = ctx.create_builder();
+
+    let i32_ty = ctx.i32_type();
+    let i8_ptr = ctx.i8_type().ptr_type(AddressSpace::Generic);
+
+    module.add_function(
+        "aethc_print_int",
+        ctx.void_type().fn_type(&[i32_ty.into()], false),
+        None,
+    );
+
+    module.add_function(
+        "aethc_print_str",
+        ctx.void_type().fn_type(&[i8_ptr.into()], false),
+        None,
+    );
+
     LlvmCtx {
         context: ctx,
         module,
@@ -160,7 +176,12 @@ fn lower_operand<'ctx>(
                 .bool_type()
                 .const_int(*b as u64, false)
                 .into(),
-            Constant::Str(_) => todo!("string literal"),
+            Constant::Str(s) => {
+                let gv = llcx
+                    .builder
+                    .build_global_string_ptr(&format!("{}\0", s), "strlit");
+                gv.as_pointer_value().into()
+            }
             Constant::Unit => panic!("unit is never a value"),
         },
         Operand::Temp(t) => *temps.get(t).expect("temp"),
@@ -230,7 +251,22 @@ fn lower_rvalue<'ctx>(
                 _ => todo!("other binops"),
             }
         }
-        _ => todo!("unary, call"),
+        Rvalue::Call { fn_name, args } => {
+            if fn_name == "print" {
+                let arg_val = lower_operand(llcx, &args[0], temps);
+                if arg_val.is_int_value() {
+                    let f = llcx.module.get_function("aethc_print_int").unwrap();
+                    llcx.builder.build_call(f, &[arg_val.into()], "");
+                } else {
+                    let f = llcx.module.get_function("aethc_print_str").unwrap();
+                    llcx.builder.build_call(f, &[arg_val.into()], "");
+                }
+                llcx.context.i32_type().const_int(0, false).into()
+            } else {
+                todo!("non builtin call")
+            }
+        }
+        _ => todo!("unary"),
     }
 }
 

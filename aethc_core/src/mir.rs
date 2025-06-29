@@ -111,6 +111,7 @@ impl<'a> LowerCtx<'a> {
             Bool { value, .. } => Operand::Const(Constant::Bool(*value)),
             Str { value, .. } => Operand::Const(Constant::Str(value.clone())),
             Unit { .. } => Operand::Const(Constant::Unit),
+            Builtin { .. } => Operand::Const(Constant::Unit),
             Ident { id, .. } => Operand::Var(*id),
             Binary { op, lhs, rhs, .. } => {
                 let l = self.lower_expr(lhs);
@@ -130,6 +131,7 @@ impl<'a> LowerCtx<'a> {
             Call { callee, args, .. } => {
                 let name = match &**callee {
                     Ident { name, .. } => name.clone(),
+                    Builtin { kind: hir::Builtin::Print, .. } => "print".to_string(),
                     _ => "<fn>".to_string(),
                 };
                 let mut a = Vec::new();
