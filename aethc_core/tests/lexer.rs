@@ -1,5 +1,13 @@
 use aethc_core::lexer::{Lexer, TokenKind, TokenKind::*};
 
+fn assert_tokens(src: &str, expected: &[TokenKind]) {
+    let mut lex = Lexer::new(src);
+    let kinds: Vec<TokenKind> = std::iter::from_fn(|| Some(lex.next_token().kind))
+        .take_while(|k| *k != Eof)
+        .collect();
+    assert_eq!(kinds, expected);
+}
+
 #[test]
 fn simple_tokens() {
     let src = r#"
@@ -35,5 +43,10 @@ fn bool_literals() {
         .collect();
 
     assert_eq!(kinds, vec![Bool(true), Bool(false)]);
+}
+
+#[test]
+fn unit_tokens() {
+    assert_tokens("()", &[LParen, RParen]);
 }
  
