@@ -207,9 +207,16 @@ impl Cx {
                 }))
             }
             Expr(e) => Ok(hir::Stmt::Expr(self.lower_expr(e)?)),
-            Return(opt) => Ok(hir::Stmt::Return(
-                opt.as_ref().map(|e| self.lower_expr(e)).transpose()?,
-            )),
+            Return(opt) => {
+                let expr = match opt {
+                    Some(e) => self.lower_expr(e)?,
+                    None => hir::Expr::Unit {
+                        id: self.fresh(),
+                        ty: Type::Unit,
+                    },
+                };
+                Ok(hir::Stmt::Return(Some(expr)))
+            }
         }
     }
 
