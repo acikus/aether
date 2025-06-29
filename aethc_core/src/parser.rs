@@ -212,6 +212,11 @@ impl<'a> Parser<'a> {
                 self.bump();
                 ast::Expr::Float(v)
             }
+            TokenKind::Bool(b) => {
+                let val = *b;
+                self.bump();
+                ast::Expr::Bool(val)
+            }
             TokenKind::Str(s) => {
                 let s = s.clone();
                 self.bump();

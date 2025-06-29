@@ -28,6 +28,7 @@ pub enum TokenKind {
     Ident(String),
     Int(i64),
     Float(f64),
+    Bool(bool),
     Str(String),
     ByteStr(Vec<u8>),
     // Operators & punctuation
@@ -174,6 +175,8 @@ impl<'a> Lexer<'a> {
             "spawn" => TokenKind::Spawn,
             "channel" => TokenKind::Channel,
             "use" => TokenKind::Use,
+            "true" => TokenKind::Bool(true),
+            "false" => TokenKind::Bool(false),
             _ => TokenKind::Ident(text.to_string()),
         };
         self.make_tok(kind, self.pos - start)

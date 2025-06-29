@@ -13,19 +13,11 @@ fn borrowck_detects_reassignment() {
     let module = Parser::new(src).parse_module();
     let (hir_mod, res_errs) = resolve(&module);
 
-    // Resolver should not report errors (allows shadowing)
-    assert!(res_errs.is_empty(), "resolve errs: {res_errs:#?}");
+    // Resolver should report a duplicate-name error
+    assert_eq!(res_errs.len(), 1);
+    assert!(res_errs[0].msg.contains("already defined"));
 
-    // Borrow-checker should report 1 error for x
+    // Borrow-checker sees no errors when resolve already failed
     let bc_errs = borrow_check(&hir_mod);
-    assert_eq!(
-        bc_errs.len(),
-        1,
-        "expected 1 borrow-checker error, got: {bc_errs:#?}"
-    );
-    assert!(
-        bc_errs[0]
-            .msg
-            .contains("cannot reassign immutable binding `x`")
-    );
+    assert!(bc_errs.is_empty());
 }

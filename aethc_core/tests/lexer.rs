@@ -25,4 +25,15 @@ fn simple_tokens() {
         ]
     );
 }
+
+#[test]
+fn bool_literals() {
+    let src = "true false";
+    let mut lex = Lexer::new(src);
+    let kinds: Vec<TokenKind> = std::iter::from_fn(|| Some(lex.next_token().kind))
+        .take_while(|k| *k != Eof)
+        .collect();
+
+    assert_eq!(kinds, vec![Bool(true), Bool(false)]);
+}
  
