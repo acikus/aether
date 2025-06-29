@@ -48,7 +48,7 @@ struct Cx {
 struct Symbol {
     id: hir::NodeId,
     ty: Type,
-    mutable: bool,
+    is_mut: bool,
 }
 
 impl Cx {
@@ -69,11 +69,16 @@ impl Cx {
     fn insert(&mut self, name: &str, sym: Symbol, span: Span) -> Result<(), ResolveError> {
         let top = self.scopes.last_mut().unwrap();
 
-        if top.contains_key(name) {
-            return Err(ResolveError {
-                span,
-                msg: format!("name `{}` is already defined in this scope", name),
-            });
+        if let Some(prev) = top.get(name) {
+            if prev.is_mut {
+                top.insert(name.to_owned(), sym);
+                return Ok(());
+            } else {
+                return Err(ResolveError {
+                    span,
+                    msg: format!("cannot redeclare immutable binding `{}`", name),
+                });
+            }
         }
         top.insert(name.to_owned(), sym);
         Ok(())
@@ -125,7 +130,7 @@ impl Cx {
             Symbol {
                 id,
                 ty: Type::Unit, // Functions have Unit type for now
-                mutable: false,
+                is_mut: false,
             },
             Span::default(),
         )?;
@@ -154,7 +159,7 @@ impl Cx {
                 Symbol {
                     id: pid,
                     ty: ty.clone(),
-                    mutable: false,
+                    is_mut: false,
                 },
                 Span::default(),
             )?;
@@ -192,7 +197,7 @@ impl Cx {
             Symbol {
                 id,
                 ty: ty.clone(),
-                mutable: g.mutable,
+                is_mut: g.mutable,
             },
             Span::default(),
         )?;
@@ -222,7 +227,7 @@ impl Cx {
                     Symbol {
                         id,
                         ty: ty.clone(),
-                        mutable: *mutable,
+                        is_mut: *mutable,
                     },
                     Span::default(),
                 )?;
@@ -237,7 +242,7 @@ impl Cx {
             Assign { name, expr } => {
                 let rhs = self.lower_expr(expr)?;
                 let info_ty = if let Some(sym) = self.lookup(name) {
-                    if !sym.mutable {
+                    if !sym.is_mut {
                         return Err(ResolveError {
                             span: Span::default(),
                             msg: format!("cannot reassign immutable binding `{name}`"),
@@ -568,7 +573,7 @@ mod tests {
         let src = "fn main(){ let x = 1; let x = 2; }";
         let (_hir, errs) = resolve(&Parser::new(src).parse_module());
         assert_eq!(errs.len(), 1);
-        assert!(errs[0].msg.contains("already defined"));
+        assert!(errs[0].msg.contains("cannot redeclare"));
     }
 
     #[test]

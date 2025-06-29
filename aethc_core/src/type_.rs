@@ -52,4 +52,8 @@ impl Type {
             _ => Err(()),
         }
     }
+
+    pub fn is_copy(&self) -> bool {
+        matches!(self, Type::Int | Type::Float | Type::Bool | Type::Unit)
+    }
 }
