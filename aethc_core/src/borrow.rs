@@ -30,6 +30,7 @@ pub enum BorrowErrorKind {
     UseAfterMove,
     AssignWhileBorrowed,
     SecondMutBorrow,
+    DoubleMove,
 }
 
 #[derive(Clone, Debug)]
@@ -89,7 +90,7 @@ impl<'hir> BorrowCtx<'hir> {
         use Expr::*;
         match expr {
             Ident { id, ty, .. } => {
-                if move_ctx && !is_copy_type(ty) {
+                if move_ctx && !ty.is_copy() {
                     self.move_var(*id);
                 } else {
                     self.use_var(*id);
@@ -105,7 +106,7 @@ impl<'hir> BorrowCtx<'hir> {
             Call { callee, args, .. } => {
                 self.check_expr(callee, false);
                 for a in args {
-                    self.check_expr(a, false);
+                    self.check_expr(a, true);
                 }
             }
             _ => {}
@@ -133,7 +134,7 @@ impl<'hir> BorrowCtx<'hir> {
                     prev_span: Span::default(),
                 }),
                 BorrowState::Moved => self.errors.push(BorrowError {
-                    kind: BorrowErrorKind::UseAfterMove,
+                    kind: BorrowErrorKind::DoubleMove,
                     span: Span::default(),
                     prev_span: Span::default(),
                 }),
@@ -154,11 +155,6 @@ impl<'hir> BorrowCtx<'hir> {
 
 pub fn check_fn_body(body: &hir::Block) -> Vec<BorrowError> {
     BorrowCtx::new(body).check()
-}
-
-fn is_copy_type(ty: &crate::type_::Type) -> bool {
-    use crate::type_::Type::*;
-    matches!(ty, Int | Float | Bool | Unit)
 }
 
 #[cfg(test)]

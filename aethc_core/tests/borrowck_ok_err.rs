@@ -15,7 +15,7 @@ fn borrowck_detects_reassignment() {
 
     // Resolver should report a duplicate-name error
     assert_eq!(res_errs.len(), 1);
-    assert!(res_errs[0].msg.contains("already defined"));
+    assert!(res_errs[0].msg.contains("cannot redeclare"));
 
     // Borrow-checker sees no errors when resolve already failed
     let bc_errs = borrow_check(&hir_mod);
