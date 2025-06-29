@@ -48,7 +48,7 @@ pub fn new_module(name: &str) -> LlvmCtx {
 }
 
 impl<'ctx> LlvmCtx<'ctx> {
-    fn ll_ty(&self, ty: &MirType) -> BasicTypeEnum<'ctx> {
+    fn ll_ty(&self, ty: &MirType) -> BasicTypeEnum<'_> {
         match ty {
             MirType::Int => self.context.i32_type().into(),
             MirType::Float => self.context.f64_type().into(),
@@ -95,7 +95,12 @@ fn get_or_create_bb<'ctx>(
     id: u32,
 ) -> inkwell::basic_block::BasicBlock<'ctx> {
     for bb in func.get_basic_blocks() {
-        if bb.get_name().to_str() == Ok(format!("bb{}", id)) {
+        if bb
+            .get_name()
+            .to_str()
+            .map(|s| s == format!("bb{}", id))
+            .unwrap_or(false)
+        {
             return bb;
         }
     }
@@ -160,7 +165,12 @@ fn lower_block<'ctx>(
         if !func
             .get_basic_blocks()
             .iter()
-            .any(|b| b.get_name().to_str() == Ok(format!("bb{}", succ)))
+            .any(|b| {
+                b.get_name()
+                    .to_str()
+                    .map(|s| s == format!("bb{}", succ))
+                    .unwrap_or(false)
+            })
         {
             let new_bb = llcx
                 .context
@@ -192,7 +202,12 @@ fn lower_operand<'ctx>(
         Operand::Temp(t) => *temps.get(t).expect("temp"),
         Operand::Var(v) => {
             let ptr = *temps.get(v).expect("var ptr");
-            llcx.builder.build_load(ptr.into_pointer_value(), "varload")
+            let ptr_val = ptr.into_pointer_value();
+            let elem_ty = ptr_val.get_type().get_element_type();
+            llcx
+                .builder
+                .build_load(ptr_val, elem_ty, "varload")
+                .expect("load")
         }
     }
 }
@@ -232,16 +247,24 @@ fn lower_rvalue<'ctx>(
                         } else {
                             r
                         };
-                        llcx.builder
+                        llcx
+                            .builder
                             .build_float_add(
                                 l_val.into_float_value(),
                                 r_val.into_float_value(),
                                 "faddtmp",
                             )
+                            .expect("fadd")
                             .into()
                     } else {
-                        llcx.builder
-                            .build_int_add(l.into_int_value(), r.into_int_value(), "iaddtmp")
+                        llcx
+                            .builder
+                            .build_int_add(
+                                l.into_int_value(),
+                                r.into_int_value(),
+                                "iaddtmp",
+                            )
+                            .expect("iadd")
                             .into()
                     }
                 }
