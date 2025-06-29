@@ -41,6 +41,7 @@ struct Cx {
     next_id: hir::NodeId,
     scopes: Vec<HashMap<String, Symbol>>, // stack of scopes
     errors: Vec<ResolveError>,
+    current_ret_ty: Option<Type>,
 }
 
 #[derive(Clone)]
@@ -113,6 +114,14 @@ impl Cx {
 
         self.push_scope();
 
+        let return_ty = if let Some(name) = &f.return_ty {
+            self.resolve_type(name, Span::default())?
+        } else {
+            Type::Unit
+        };
+
+        self.current_ret_ty = Some(return_ty.clone());
+
         // params
         let mut params = Vec::new();
         for p in &f.params {
@@ -144,12 +153,13 @@ impl Cx {
             stmts.push(self.lower_stmt(s)?);
         }
         self.pop_scope();
+        self.current_ret_ty = None;
 
         Ok(hir::HirFn {
             id,
             name: f.name.clone(),
             params,
-            return_ty: Type::Unit,
+            return_ty,
             body: hir::Block { id, stmts },
         })
     }
@@ -215,6 +225,14 @@ impl Cx {
                         ty: Type::Unit,
                     },
                 };
+                if let Some(expected) = &self.current_ret_ty {
+                    if expr.ty() != expected {
+                        return Err(ResolveError {
+                            span: Span::default(),
+                            msg: format!("expected {:?}, got {:?}", expected, expr.ty()),
+                        });
+                    }
+                }
                 Ok(hir::Stmt::Return(Some(expr)))
             }
         }
