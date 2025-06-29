@@ -298,14 +298,22 @@ impl Cx {
         let id = self.fresh();
         Ok(match e {
             Ident(name) => {
-                let sym = self.lookup(name).ok_or_else(|| ResolveError {
-                    span: Span::default(),
-                    msg: format!("unknown name `{name}`"),
-                })?;
-                hir::Expr::Ident {
-                    id: sym.id,
-                    name: name.clone(),
-                    ty: sym.ty.clone(),
+                if name == "print" {
+                    hir::Expr::Builtin {
+                        id,
+                        kind: hir::Builtin::Print,
+                        ty: Type::Unit,
+                    }
+                } else {
+                    let sym = self.lookup(name).ok_or_else(|| ResolveError {
+                        span: Span::default(),
+                        msg: format!("unknown name `{name}`"),
+                    })?;
+                    hir::Expr::Ident {
+                        id: sym.id,
+                        name: name.clone(),
+                        ty: sym.ty.clone(),
+                    }
                 }
             }
             Int(v) => hir::Expr::Int {
@@ -339,6 +347,16 @@ impl Cx {
                 for x in args {
                     a.push(self.lower_expr(x)?);
                 }
+
+                if let hir::Expr::Builtin { kind: hir::Builtin::Print, .. } = &cal_h {
+                    if a.len() != 1 || !(a[0].ty() == &Type::Int || a[0].ty() == &Type::Str) {
+                        return Err(ResolveError {
+                            span: Span::default(),
+                            msg: "print unsupported type".to_string(),
+                        });
+                    }
+                }
+
                 hir::Expr::Call {
                     id,
                     callee: Box::new(cal_h),
