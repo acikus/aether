@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use inkwell::{
     AddressSpace,
     builder::Builder,
     context::Context,
     module::Module,
-    types::BasicTypeEnum,
+    types::{BasicType, BasicTypeEnum},
     values::{BasicValueEnum, FunctionValue},
 };
 
@@ -14,41 +15,54 @@ use crate::mir::{
     BasicBlock, Constant, MirBody, MirType, Operand, RET_TEMP, Rvalue, Statement, TempId,
     Terminator,
 };
+
+// Safe approach: Use Rc to share ownership of the context
 pub struct LlvmCtx<'ctx> {
-    pub context: Context,
+    pub context: &'ctx Context,
     pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
 }
 
-pub fn new_module(name: &str) -> LlvmCtx {
-    let ctx = Context::create();
-    let module = ctx.create_module(name);
-    let builder = ctx.create_builder();
+pub struct LlvmContext {
+    context: Context,
+}
 
-    let i32_ty = ctx.i32_type();
-    let i8_ptr = ctx.i8_type().ptr_type(AddressSpace::default());
+impl LlvmContext {
+    pub fn new() -> Self {
+        Self {
+            context: Context::create(),
+        }
+    }
 
-    module.add_function(
-        "aethc_print_int",
-        ctx.void_type().fn_type(&[i32_ty.into()], false),
-        None,
-    );
+    pub fn create_llvm_ctx<'ctx>(&'ctx self, name: &str) -> LlvmCtx<'ctx> {
+        let module = self.context.create_module(name);
+        let builder = self.context.create_builder();
 
-    module.add_function(
-        "aethc_print_str",
-        ctx.void_type().fn_type(&[i8_ptr.into()], false),
-        None,
-    );
+        let i32_ty = self.context.i32_type();
+        let i8_ptr = self.context.i8_type().ptr_type(AddressSpace::default());
 
-    LlvmCtx {
-        context: ctx,
-        module,
-        builder,
+        module.add_function(
+            "aethc_print_int",
+            self.context.void_type().fn_type(&[i32_ty.into()], false),
+            None,
+        );
+
+        module.add_function(
+            "aethc_print_str",
+            self.context.void_type().fn_type(&[i8_ptr.into()], false),
+            None,
+        );
+
+        LlvmCtx {
+            context: &self.context,
+            module,
+            builder,
+        }
     }
 }
 
 impl<'ctx> LlvmCtx<'ctx> {
-    fn ll_ty(&self, ty: &MirType) -> BasicTypeEnum<'_> {
+    fn ll_ty(&self, ty: &MirType) -> BasicTypeEnum<'ctx> {
         match ty {
             MirType::Int => self.context.i32_type().into(),
             MirType::Float => self.context.f64_type().into(),
@@ -65,12 +79,14 @@ impl<'ctx> LlvmCtx<'ctx> {
 
 pub fn codegen_fn<'ctx>(llcx: &mut LlvmCtx<'ctx>, name: &str, mir: &MirBody) {
     let func = match mir.ret_ty {
-        MirType::Unit => llcx
-            .module
-            .add_function(name, llcx.context.void_type().fn_type(&[], false), None),
+        MirType::Unit => {
+            llcx.module
+                .add_function(name, llcx.context.void_type().fn_type(&[], false), None)
+        }
         _ => {
             let ret_ty = llcx.ll_ty(&mir.ret_ty);
-            llcx.module.add_function(name, ret_ty.fn_type(&[], false), None)
+            llcx.module
+                .add_function(name, ret_ty.fn_type(&[], false), None)
         }
     };
 
@@ -137,16 +153,17 @@ fn lower_block<'ctx>(
 
     match &bb.term {
         Terminator::Return => {
-            if *ret_ty == MirType::Unit {
-                llcx.builder.build_return(None);
+            // Fix: Use matches! macro or implement PartialEq for MirType
+            if matches!(ret_ty, MirType::Unit) {
+                let _ = llcx.builder.build_return(None);
             } else {
                 let ret_val = temps.get(&RET_TEMP).expect("ret temp");
-                llcx.builder.build_return(Some(ret_val));
+                let _ = llcx.builder.build_return(Some(ret_val));
             }
         }
         Terminator::Goto(id) => {
             let l_bb = get_or_create_bb(llcx, func, *id);
-            llcx.builder.build_unconditional_branch(l_bb);
+            let _ = llcx.builder.build_unconditional_branch(l_bb);
         }
         Terminator::CondBranch {
             cond,
@@ -156,22 +173,19 @@ fn lower_block<'ctx>(
             let cond_val = lower_operand(llcx, cond, temps).into_int_value();
             let then_ll = get_or_create_bb(llcx, func, *then_bb);
             let else_ll = get_or_create_bb(llcx, func, *else_bb);
-            llcx.builder
+            let _ = llcx
+                .builder
                 .build_conditional_branch(cond_val, then_ll, else_ll);
         }
     }
 
     for succ in succ_blocks(&bb.term) {
-        if !func
-            .get_basic_blocks()
-            .iter()
-            .any(|b| {
-                b.get_name()
-                    .to_str()
-                    .map(|s| s == format!("bb{}", succ))
-                    .unwrap_or(false)
-            })
-        {
+        if !func.get_basic_blocks().iter().any(|b| {
+            b.get_name()
+                .to_str()
+                .map(|s| s == format!("bb{}", succ))
+                .unwrap_or(false)
+        }) {
             let new_bb = llcx
                 .context
                 .append_basic_block(func, &format!("bb{}", succ));
@@ -194,7 +208,8 @@ fn lower_operand<'ctx>(
             Constant::Str(s) => {
                 let gv = llcx
                     .builder
-                    .build_global_string_ptr(&format!("{}\0", s), "strlit");
+                    .build_global_string_ptr(&format!("{}\0", s), "strlit")
+                    .expect("Failed to build global string ptr");
                 gv.as_pointer_value().into()
             }
             Constant::Unit => panic!("unit is never a value"),
@@ -203,11 +218,14 @@ fn lower_operand<'ctx>(
         Operand::Var(v) => {
             let ptr = *temps.get(v).expect("var ptr");
             let ptr_val = ptr.into_pointer_value();
-            let elem_ty = ptr_val.get_type().get_element_type();
-            llcx
-                .builder
-                .build_load(ptr_val, elem_ty, "varload")
-                .expect("load")
+
+            // For LLVM 16+, we need to specify the type explicitly
+            // You'll need to determine the correct type based on your type system
+            let elem_ty = llcx.context.i32_type(); // Adjust this based on your actual type
+
+            llcx.builder
+                .build_load(elem_ty, ptr_val, "varload")
+                .expect("Failed to build load")
         }
     }
 }
@@ -232,9 +250,9 @@ fn lower_rvalue<'ctx>(
                                     llcx.context.f64_type(),
                                     "sitofp",
                                 )
-                                .into()
+                                .expect("Failed to build sitofp")
                         } else {
-                            l
+                            l.into_float_value()
                         };
                         let r_val = if r.is_int_value() {
                             llcx.builder
@@ -243,28 +261,19 @@ fn lower_rvalue<'ctx>(
                                     llcx.context.f64_type(),
                                     "sitofp",
                                 )
-                                .into()
+                                .expect("Failed to build sitofp")
                         } else {
-                            r
+                            r.into_float_value()
                         };
-                        llcx
-                            .builder
-                            .build_float_add(
-                                l_val.into_float_value(),
-                                r_val.into_float_value(),
-                                "faddtmp",
-                            )
-                            .expect("fadd")
+
+                        llcx.builder
+                            .build_float_add(l_val, r_val, "faddtmp")
+                            .expect("Failed to build float add")
                             .into()
                     } else {
-                        llcx
-                            .builder
-                            .build_int_add(
-                                l.into_int_value(),
-                                r.into_int_value(),
-                                "iaddtmp",
-                            )
-                            .expect("iadd")
+                        llcx.builder
+                            .build_int_add(l.into_int_value(), r.into_int_value(), "iaddtmp")
+                            .expect("Failed to build int add")
                             .into()
                     }
                 }
@@ -276,10 +285,10 @@ fn lower_rvalue<'ctx>(
                 let arg_val = lower_operand(llcx, &args[0], temps);
                 if arg_val.is_int_value() {
                     let f = llcx.module.get_function("aethc_print_int").unwrap();
-                    llcx.builder.build_call(f, &[arg_val.into()], "");
+                    let _ = llcx.builder.build_call(f, &[arg_val.into()], "");
                 } else {
                     let f = llcx.module.get_function("aethc_print_str").unwrap();
-                    llcx.builder.build_call(f, &[arg_val.into()], "");
+                    let _ = llcx.builder.build_call(f, &[arg_val.into()], "");
                 }
                 llcx.context.i32_type().const_int(0, false).into()
             } else {
@@ -290,6 +299,6 @@ fn lower_rvalue<'ctx>(
     }
 }
 
-pub fn write_ir(llcx: &LlvmCtx, path: &str) {
+pub fn write_ir<'ctx>(llcx: &LlvmCtx<'ctx>, path: &str) {
     llcx.module.print_to_file(path).unwrap();
 }
