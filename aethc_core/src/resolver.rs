@@ -382,12 +382,6 @@ impl Cx {
                             }
                         }
                     }
-                    _ => {
-                        return Err(ResolveError {
-                            span: Span::default(),
-                            msg: format!("unsupported binary operation: {:?}", op),
-                        });
-                    }
                 };
                 hir::Expr::Binary {
                     id,
