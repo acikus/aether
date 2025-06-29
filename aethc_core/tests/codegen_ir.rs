@@ -2,7 +2,7 @@ use aethc_core::{
     parser::Parser,
     resolver::resolve,
     mir::{self},
-    codegen::{new_module, codegen_fn},
+    codegen::{LlvmCtx, codegen_fn},
 };
 
 fn build_dummy_add() -> mir::MirBody {
@@ -20,7 +20,7 @@ fn build_dummy_add() -> mir::MirBody {
 #[test]
 fn simple_add() {
     let mir = build_dummy_add();
-    let mut llcx = new_module("test");
+    let mut llcx = LlvmCtx::new("test");
     codegen_fn(&mut llcx, "add", &mir);
     let txt = llcx.module.print_to_string().to_string();
     assert!(txt.contains("define i32 @add()"));
