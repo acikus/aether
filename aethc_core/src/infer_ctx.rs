@@ -16,6 +16,7 @@ pub enum Ty {
     Bool,
     Str,
     Unit,
+    Error,
     Var(TypeVarId),
 }
 
@@ -26,8 +27,23 @@ pub enum TvOrTy {
 }
 
 #[derive(Clone, Debug)]
-pub enum Constraint {
-    Eq(TvOrTy, TvOrTy),
+pub struct Constraint {
+    pub left: TvOrTy,
+    pub right: TvOrTy,
+    pub left_span: Span,
+    pub right_span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeError {
+    pub kind: TypeErrorKind,
+    pub primary_span: Span,
+    pub secondary_span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum TypeErrorKind {
+    Mismatch { found: Ty, expected: Ty },
 }
 
 pub struct InferCtx {
@@ -35,11 +51,18 @@ pub struct InferCtx {
     pub vars: Vec<TypeVar>,
     pub constraints: VecDeque<Constraint>,
     pub subst: HashMap<TypeVarId, Ty>,
+    pub errors: Vec<TypeError>,
 }
 
 impl InferCtx {
     pub fn new() -> Self {
-        Self { next_tv: 0, vars: Vec::new(), constraints: VecDeque::new(), subst: HashMap::new() }
+        Self {
+            next_tv: 0,
+            vars: Vec::new(),
+            constraints: VecDeque::new(),
+            subst: HashMap::new(),
+            errors: Vec::new(),
+        }
     }
 
     pub fn fresh(&mut self, span: Span) -> TvOrTy {
@@ -55,6 +78,7 @@ impl InferCtx {
                 Some(t) => self.apply_ty(t.clone()),
                 None => Ty::Var(v),
             },
+            Ty::Error => Ty::Error,
             other => other,
         }
     }
@@ -69,39 +93,44 @@ impl InferCtx {
         }
     }
 
-    pub fn solve(&mut self) -> Result<(), String> {
+    pub fn solve(&mut self) {
         while let Some(c) = self.constraints.pop_front() {
-            match c {
-                Constraint::Eq(a, b) => {
-                    let a_res = self.apply(a.clone());
-                    let b_res = self.apply(b.clone());
-                    if a_res == b_res {
-                        continue;
-                    }
-                    match (a_res, b_res) {
-                        (TvOrTy::Var(v), TvOrTy::Ty(ty)) | (TvOrTy::Ty(ty), TvOrTy::Var(v)) => {
-                            self.subst.insert(v, ty);
+            let a_res = self.apply(c.left.clone());
+            let b_res = self.apply(c.right.clone());
+
+            if a_res == b_res {
+                continue;
+            }
+
+            match (a_res, b_res) {
+                (TvOrTy::Var(v), TvOrTy::Ty(ty)) | (TvOrTy::Ty(ty), TvOrTy::Var(v)) => {
+                    self.subst.insert(v, ty);
+                }
+                (TvOrTy::Var(v1), TvOrTy::Var(v2)) => {
+                    self.subst.insert(v1, Ty::Var(v2));
+                }
+                (TvOrTy::Ty(ty1), TvOrTy::Ty(ty2)) => {
+                    let unified = match (ty1.clone(), ty2.clone()) {
+                        (Ty::Int, Ty::Float) | (Ty::Float, Ty::Int) => Some(Ty::Float),
+                        (ref x, ref y) if x == y => Some(x.clone()),
+                        (found, expected) => {
+                            self.errors.push(TypeError {
+                                kind: TypeErrorKind::Mismatch { found, expected },
+                                primary_span: c.left_span,
+                                secondary_span: c.right_span,
+                            });
+                            Some(Ty::Error)
                         }
-                        (TvOrTy::Var(v1), TvOrTy::Var(v2)) => {
-                            self.subst.insert(v1, Ty::Var(v2));
-                        }
-                        (TvOrTy::Ty(ty1), TvOrTy::Ty(ty2)) => {
-                            match Ty::unify(&ty1, &ty2) {
-                                Ok(t) => {
-                                    if t == Ty::Float {
-                                        self.subst_promote_float();
-                                    }
-                                }
-                                Err(_) => {
-                                    return Err(format!("type mismatch: {:?} vs {:?}", ty1, ty2));
-                                }
-                            }
+                    };
+
+                    if let Some(t) = unified {
+                        if t == Ty::Float {
+                            self.subst_promote_float();
                         }
                     }
                 }
             }
         }
-        Ok(())
     }
 
     fn subst_promote_float(&mut self) {
@@ -123,6 +152,7 @@ impl Ty {
             (Bool, Bool) => Ok(Bool),
             (Str, Str) => Ok(Str),
             (Unit, Unit) => Ok(Unit),
+            (Error, _) | (_, Error) => Ok(Error),
             _ => Err(()),
         }
     }
