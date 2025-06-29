@@ -10,9 +10,10 @@ use inkwell::{
 };
 
 use crate::mir::{
-    BasicBlock, BinOp, Constant, MirBody, MirType, Operand, Rvalue, Statement,
+    BasicBlock, Constant, MirBody, MirType, Operand, Rvalue, Statement,
     Terminator, TempId, RET_TEMP,
 };
+use crate::hir::BinOp;
 
 pub struct LlvmCtx<'ctx> {
     pub context: Context,
