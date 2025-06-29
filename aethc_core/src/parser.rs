@@ -66,15 +66,22 @@ impl<'a> Parser<'a> {
         }
         self.expect(TokenKind::RParen);
 
-        // body
+        let body = self.parse_fn_body();
+
+        ast::Function { name, params, body }
+    }
+
+    fn parse_fn_body(&mut self) -> Vec<ast::Stmt> {
         self.expect(TokenKind::LBrace);
         let mut body = Vec::new();
         while self.lookahead.kind != TokenKind::RBrace {
             body.push(self.parse_stmt());
         }
+        if !matches!(body.last(), Some(ast::Stmt::Return(_))) {
+            body.push(ast::Stmt::Return(Some(ast::Expr::Unit)));
+        }
         self.expect(TokenKind::RBrace);
-
-        ast::Function { name, params, body }
+        body
     }
 
     /*──────── statements ─*/
@@ -196,6 +203,11 @@ impl<'a> Parser<'a> {
 
     /*──────── primary ─────*/
     fn parse_primary(&mut self) -> ast::Expr {
+        if self.peek(TokenKind::LParen) && self.peek_next(TokenKind::RParen) {
+            self.expect(TokenKind::LParen);
+            self.expect(TokenKind::RParen);
+            return ast::Expr::Unit;
+        }
         match &self.lookahead.kind {
             TokenKind::Ident(n) => {
                 let s = n.clone();
@@ -270,6 +282,16 @@ impl<'a> Parser<'a> {
     }
     fn bump(&mut self) {
         self.lookahead = self.lexer.next_token();
+    }
+
+    fn peek(&self, kind: TokenKind) -> bool {
+        std::mem::discriminant(&self.lookahead.kind) == std::mem::discriminant(&kind)
+    }
+
+    fn peek_next(&self, kind: TokenKind) -> bool {
+        let mut lx = self.lexer.clone();
+        let tok = lx.next_token();
+        std::mem::discriminant(&tok.kind) == std::mem::discriminant(&kind)
     }
 
     /*──────── global let ───*/

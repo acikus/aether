@@ -71,6 +71,7 @@ pub struct Token {
     pub span: Span,
 }
 
+#[derive(Clone)]
 pub struct Lexer<'a> {
     input: &'a str,
     pos: usize,
