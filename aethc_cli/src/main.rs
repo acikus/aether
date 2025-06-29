@@ -115,7 +115,7 @@ fn run_full_frontend(path: &PathBuf, emit: Option<&str>) -> Result<LlvmModule<'s
     }
 
     // Codegen
-    let mut llcx = aethc_core::codegen::new_module("app");
+    let mut llcx = aethc_core::codegen::LlvmCtx::new("app");
     aethc_core::codegen::codegen_fn(&mut llcx, "main", &mir);
 
     if let Some("llvm") = emit {
@@ -127,11 +127,12 @@ fn run_full_frontend(path: &PathBuf, emit: Option<&str>) -> Result<LlvmModule<'s
 }
 
 fn link_with_clang(bc: &std::path::Path, out: &std::path::Path) {
+    let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
     let status = std::process::Command::new("clang")
         .arg("-O0")
         .arg(bc)
         .arg("-L")
-        .arg(format!("{}/debug", env!("CARGO_TARGET_DIR")))
+        .arg(format!("{target_dir}/debug"))
         .arg("-laethc_runtime")
         .arg("-o")
         .arg(out)

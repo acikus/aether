@@ -27,6 +27,36 @@ pub struct LlvmContext {
     context: Context,
 }
 
+impl LlvmCtx<'static> {
+    /// Create a new LLVM context, module and builder with built-in functions.
+    pub fn new(name: &str) -> Self {
+        let context = Box::leak(Box::new(Context::create()));
+        let module = context.create_module(name);
+        let builder = context.create_builder();
+
+        let i32_ty = context.i32_type();
+        let i8_ptr = context.i8_type().ptr_type(AddressSpace::default());
+
+        module.add_function(
+            "aethc_print_int",
+            context.void_type().fn_type(&[i32_ty.into()], false),
+            None,
+        );
+
+        module.add_function(
+            "aethc_print_str",
+            context.void_type().fn_type(&[i8_ptr.into()], false),
+            None,
+        );
+
+        Self {
+            context,
+            module,
+            builder,
+        }
+    }
+}
+
 impl LlvmContext {
     pub fn new() -> Self {
         Self {
