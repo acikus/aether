@@ -56,6 +56,7 @@ pub struct Block {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(HirLet),
+    Assign { id: NodeId, name: String, expr: Expr },
     Expr(Expr), // value used
     Semi(Expr), // value ignored
     Return(Option<Expr>),
