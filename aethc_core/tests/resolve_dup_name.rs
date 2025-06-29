@@ -10,11 +10,11 @@ fn duplicate_name_error() {
     let module = Parser::new(&src).parse_module();
     let (hir_mod, res_errs) = resolve(&module);
 
-    // Resolver should not report errors (allows shadowing)
-    assert_eq!(res_errs.len(), 0);
+    // Resolver should report an error for the duplicate name
+    assert_eq!(res_errs.len(), 1);
+    assert!(res_errs[0].msg.contains("already defined"));
 
-    // Borrow checker should catch the immutable reassignment
+    // Borrow checker sees no errors when resolve already failed
     let bc_errs = borrow_check(&hir_mod);
-    assert_eq!(bc_errs.len(), 1);
-    assert!(bc_errs[0].msg.contains("cannot reassign immutable binding"));
+    assert!(bc_errs.is_empty());
 }
