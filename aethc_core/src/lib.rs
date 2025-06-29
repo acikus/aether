@@ -5,5 +5,6 @@ pub mod hir;
 pub mod parser;
 pub mod resolver;
 pub mod borrowck;
+pub mod borrow;
 pub mod infer_ctx;
 pub mod type_inference;
