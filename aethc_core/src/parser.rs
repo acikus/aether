@@ -329,3 +329,23 @@ impl<'a> Parser<'a> {
         }
     }
 }
+
+/*──────── utility parsers ───*/
+
+/// Parse a single expression from `src` using the same parser
+/// implementation that is used for full modules.
+pub fn parse_expr(src: &str) -> ast::Expr {
+    let mut p = Parser::new(src);
+    let expr = p.parse_expr(0);
+    assert!(p.lookahead.kind == TokenKind::Eof, "trailing input after expression");
+    expr
+}
+
+/// Parse a single statement from `src`. Currently only a subset of
+/// statements used in tests is supported.
+pub fn parse_stmt(src: &str) -> ast::Stmt {
+    let mut p = Parser::new(src);
+    let stmt = p.parse_stmt();
+    assert!(p.lookahead.kind == TokenKind::Eof, "trailing input after statement");
+    stmt
+}
