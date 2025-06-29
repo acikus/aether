@@ -96,6 +96,13 @@ impl<'a> Parser<'a> {
         match self.lookahead.kind {
             TokenKind::Let => self.parse_let(),
             TokenKind::Return => self.parse_return(),
+            TokenKind::Ident(_) if self.peek_next(TokenKind::Assign) => {
+                let name = self.expect_ident();
+                self.expect(TokenKind::Assign);
+                let expr = self.parse_expr(0);
+                self.expect(TokenKind::Semicolon);
+                ast::Stmt::Assign { name, expr }
+            }
             _ => {
                 let expr = self.parse_expr(0);
                 self.expect(TokenKind::Semicolon);

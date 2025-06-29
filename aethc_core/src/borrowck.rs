@@ -40,6 +40,15 @@ fn check_block(
                     }
                 };
             }
+            hir::Stmt::Assign { name, .. } => {
+                match defined.get(name) {
+                    Some(true) => {},
+                    _ => errs.push(ResolveError {
+                        span: Span { start: 0, end: 0, line: 0, column: 0 },
+                        msg: format!("cannot reassign immutable binding `{}`", name),
+                    }),
+                }
+            }
             hir::Stmt::Expr(_) | hir::Stmt::Semi(_) | hir::Stmt::Return(_) => {}
         }
     }

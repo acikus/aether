@@ -83,6 +83,15 @@ impl Cx {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
 
+    fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol> {
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some(sym) = scope.get_mut(name) {
+                return Some(sym);
+            }
+        }
+        None
+    }
+
     /// Check if a value of `actual` type can be implicitly converted to
     /// `expected`. Currently this only allows Int to be promoted to Float.
     fn compatible(&self, expected: &Type, actual: &Type) -> bool {
@@ -224,6 +233,37 @@ impl Cx {
                     ty,
                     init: rhs,
                 }))
+            }
+            Assign { name, expr } => {
+                let rhs = self.lower_expr(expr)?;
+                let info_ty = if let Some(sym) = self.lookup(name) {
+                    if !sym.mutable {
+                        return Err(ResolveError {
+                            span: Span::default(),
+                            msg: format!("cannot reassign immutable binding `{name}`"),
+                        });
+                    }
+                    sym.ty.clone()
+                } else {
+                    return Err(ResolveError {
+                        span: Span::default(),
+                        msg: format!("unknown name `{name}`"),
+                    });
+                };
+
+                let new_ty = match Type::unify(&info_ty, rhs.ty()) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        return Err(ResolveError {
+                            span: Span::default(),
+                            msg: format!("expected {:?}, got {:?}", info_ty, rhs.ty()),
+                        });
+                    }
+                };
+
+                let sym = self.lookup_mut(name).unwrap();
+                sym.ty = new_ty.clone();
+                Ok(hir::Stmt::Assign { id: sym.id, name: name.clone(), expr: rhs })
             }
             Expr(e) => Ok(hir::Stmt::Expr(self.lower_expr(e)?)),
             Return(opt) => {

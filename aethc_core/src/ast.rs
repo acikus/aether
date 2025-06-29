@@ -67,6 +67,10 @@ pub enum Stmt {
         expr: Expr,
         mutable: bool,
     },
+    Assign {
+        name: String,
+        expr: Expr,
+    },
     Expr(Expr),
     Return(Option<Expr>),
 }
