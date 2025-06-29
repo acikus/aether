@@ -1,8 +1,11 @@
-use std::{fs, path::PathBuf};
-use clap::{Parser, Subcommand};
-use ariadne::{Report, ReportKind, Label, Source};
-
 use aethc_core::{self, lexer::Span};
+use ariadne::{Label, Report, ReportKind, Source};
+use clap::{Parser, Subcommand};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 #[derive(Parser)]
 #[command(name = "aethc", version)]
@@ -49,18 +52,16 @@ fn main() -> std::process::ExitCode {
             let ok = run_full_frontend(&file, None).is_ok();
             exit_code(ok)
         }
-        Cmd::Build { file, output, emit } => {
-            match run_full_frontend(&file, emit.as_deref()) {
-                Ok(mut llvm_module) => {
-                    let bitcode_path = output.with_extension("bc");
-                    llvm_module.module.write_bitcode_to_path(&bitcode_path);
-                    link_with_clang(&bitcode_path, &output);
-                    println!("built {}", output.display());
-                    exit_code(true)
-                }
-                Err(_) => exit_code(false),
+        Cmd::Build { file, output, emit } => match run_full_frontend(&file, emit.as_deref()) {
+            Ok(mut llvm_module) => {
+                let bitcode_path = output.with_extension("bc");
+                llvm_module.module.write_bitcode_to_path(&bitcode_path);
+                link_with_clang(&bitcode_path, &output);
+                println!("built {}", output.display());
+                exit_code(true)
             }
-        }
+            Err(_) => exit_code(false),
+        },
     }
 }
 
@@ -126,24 +127,86 @@ fn run_full_frontend(path: &PathBuf, emit: Option<&str>) -> Result<LlvmModule<'s
     Ok(llcx)
 }
 
-fn link_with_clang(bc: &std::path::Path, out: &std::path::Path) {
-    let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
-    let status = std::process::Command::new("clang")
-        .arg("-O0")
-        .arg(bc)
-        .arg("-L")
-        .arg(format!("{target_dir}/debug"))
-        .arg("-laethc_runtime")
-        .arg("-o")
-        .arg(out)
+// fn link_with_clang(bc: &std::path::Path, out: &std::path::Path) {
+//     let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
+//     let status = std::process::Command::new("clang")
+//         .arg("-O0")
+//         .arg(bc)
+//         .arg("-L")
+//         .arg(format!("{target_dir}/debug"))
+//         .arg("-laethc_runtime")
+//         .arg("-o")
+//         .arg(out)
+//         .status()
+//         .expect("failed to invoke clang");
+//     if !status.success() {
+//         eprintln!("link failed");
+//         std::process::exit(1);
+//     }
+// }
+// fn link_with_clang(bc: &Path, exe: &Path) {
+//     // ── 1. target dir (пада на „target“ ако пром. нема) ───────────
+//     let target_root = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
+
+//     // ── 2. профил: runtime→PROFILE  ∥  compile-time→debug_assertions ─
+//     let profile = env::var("PROFILE").unwrap_or_else(|_| {
+//         if cfg!(debug_assertions) {
+//             "debug".into()
+//         } else {
+//             "release".into()
+//         }
+//     });
+
+//     // ── 3. triple: runtime→CARGO_CFG_TARGET_TRIPLE ∥ HOST/вг. компилера ─
+//     let triple = env::var("CARGO_CFG_TARGET_TRIPLE")
+//         .or_else(|_| env::var("HOST"))
+//         .unwrap_or_else(|_| "x86_64-pc-windows-msvc".into());
+
+//     // …\target\<triple>\<profile>
+//     let lib_dir: PathBuf = [target_root.as_str(), &triple, &profile].iter().collect();
+
+//     // MSVC линкер преко clang-а: −LIBPATH:<dir>
+//     let libpath = format!("-LIBPATH:{}", lib_dir.display());
+
+//     let status = Command::new("clang")
+//         .arg("-O0")
+//         .arg(bc)
+//         .arg(libpath)
+//         .arg("aethc_runtime.lib") // директно .lib
+//         .arg("-o")
+//         .arg(exe)
+//         .status()
+//         .expect("failed to invoke clang");
+
+//     if !status.success() {
+//         eprintln!("link failed (clang exit {})", status);
+//         std::process::exit(1);
+//     }
+// }
+fn link_with_clang(bc: &Path, exe: &Path) {
+    // директоријум који је build.rs уписао
+    let lib_dir = std::path::PathBuf::from(env!("AETHC_RUNTIME_DIR"));
+
+    // пун пут до .lib
+    let lib_path = lib_dir.join("aethc_runtime.lib");
+
+    let status = Command::new("clang")
+        .args([
+            "-O0",
+            bc.to_str().unwrap(),
+            &format!("-LIBPATH:{}", lib_dir.display()),
+            lib_path.to_str().unwrap(),
+            "-o",
+            exe.to_str().unwrap(),
+        ])
         .status()
         .expect("failed to invoke clang");
+
     if !status.success() {
-        eprintln!("link failed");
+        eprintln!("link failed ({status})");
         std::process::exit(1);
     }
 }
-
 fn exit_code(ok: bool) -> std::process::ExitCode {
     if ok { 0.into() } else { 1.into() }
 }
@@ -154,16 +217,28 @@ trait SpannedError {
 }
 
 impl SpannedError for aethc_core::LexError {
-    fn span(&self) -> Span { self.span }
-    fn msg(&self) -> String { self.msg.clone() }
+    fn span(&self) -> Span {
+        self.span
+    }
+    fn msg(&self) -> String {
+        self.msg.clone()
+    }
 }
 
 impl SpannedError for aethc_core::resolver::ResolveError {
-    fn span(&self) -> Span { self.span }
-    fn msg(&self) -> String { self.msg.clone() }
+    fn span(&self) -> Span {
+        self.span
+    }
+    fn msg(&self) -> String {
+        self.msg.clone()
+    }
 }
 
 impl SpannedError for aethc_core::borrow::BorrowError {
-    fn span(&self) -> Span { self.span }
-    fn msg(&self) -> String { format!("{:?}", self.kind) }
+    fn span(&self) -> Span {
+        self.span
+    }
+    fn msg(&self) -> String {
+        format!("{:?}", self.kind)
+    }
 }
