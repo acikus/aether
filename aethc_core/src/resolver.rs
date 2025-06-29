@@ -83,6 +83,13 @@ impl Cx {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
 
+    /// Check if a value of `actual` type can be implicitly converted to
+    /// `expected`. Currently the only allowed implicit conversion is
+    /// Int → Float.
+    fn compatible(&self, expected: &Type, actual: &Type) -> bool {
+        expected == actual || (expected == &Type::Float && actual == &Type::Int)
+    }
+
     /*──────── type lookup ───────*/
     fn resolve_type(&mut self, name: &str, span: Span) -> Result<Type, ResolveError> {
         match name {
@@ -226,7 +233,7 @@ impl Cx {
                     },
                 };
                 if let Some(expected) = &self.current_ret_ty {
-                    if expr.ty() != expected {
+                    if !self.compatible(expected, expr.ty()) {
                         return Err(ResolveError {
                             span: Span::default(),
                             msg: format!("expected {:?}, got {:?}", expected, expr.ty()),
