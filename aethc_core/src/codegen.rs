@@ -26,7 +26,7 @@ pub fn new_module(name: &str) -> LlvmCtx {
     let builder = ctx.create_builder();
 
     let i32_ty = ctx.i32_type();
-    let i8_ptr = ctx.i8_type().ptr_type(AddressSpace::Generic);
+    let i8_ptr = ctx.i8_type().ptr_type(AddressSpace::default());
 
     module.add_function(
         "aethc_print_int",
@@ -56,7 +56,7 @@ impl<'ctx> LlvmCtx<'ctx> {
             MirType::Str => self
                 .context
                 .i8_type()
-                .ptr_type(AddressSpace::Generic)
+                .ptr_type(AddressSpace::default())
                 .into(),
             MirType::Unit => unreachable!("unit type has no LLVM equivalent"),
         }
