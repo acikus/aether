@@ -66,9 +66,16 @@ impl<'a> Parser<'a> {
         }
         self.expect(TokenKind::RParen);
 
+        let return_ty = if self.lookahead.kind == TokenKind::Arrow {
+            self.bump();
+            Some(self.expect_ident())
+        } else {
+            None
+        };
+
         let body = self.parse_fn_body();
 
-        ast::Function { name, params, body }
+        ast::Function { name, params, return_ty, body }
     }
 
     fn parse_fn_body(&mut self) -> Vec<ast::Stmt> {

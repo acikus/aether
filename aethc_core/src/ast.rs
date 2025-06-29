@@ -15,6 +15,7 @@ pub enum Item {
 pub struct Function {
     pub name: String,
     pub params: Vec<Param>,
+    pub return_ty: Option<String>,
     pub body: Vec<Stmt>,
 }
 
