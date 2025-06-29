@@ -224,9 +224,14 @@ impl<'a> Parser<'a> {
             }
             TokenKind::LParen => {
                 self.bump();
-                let e = self.parse_expr(0);
-                self.expect(TokenKind::RParen);
-                e
+                if self.lookahead.kind == TokenKind::RParen {
+                    self.bump();
+                    ast::Expr::Unit
+                } else {
+                    let e = self.parse_expr(0);
+                    self.expect(TokenKind::RParen);
+                    e
+                }
             }
             _ => panic!("unexpected token {:?}", self.lookahead.kind),
         }

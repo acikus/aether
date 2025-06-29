@@ -84,6 +84,10 @@ pub enum Expr {
         value: bool,
         ty: Type,
     },
+    Unit {
+        id: NodeId,
+        ty: Type,
+    },
     Str {
         id: NodeId,
         value: String,
@@ -119,6 +123,7 @@ impl Expr {
             | Int { ty, .. }
             | Float { ty, .. }
             | Bool { ty, .. }
+            | Unit { ty, .. }
             | Str { ty, .. }
             | Call { ty, .. }
             | Unary { ty, .. }
@@ -128,15 +133,6 @@ impl Expr {
 
     /// Treat a block as Unit expression (placeholder until we have real value)
     pub fn from_block(b: Block) -> Self {
-        Expr::Call {
-            id: b.id,
-            callee: Box::new(Expr::Ident {
-                id: b.id,
-                name: "{block}".into(),
-                ty: Type::Unit,
-            }),
-            args: vec![],
-            ty: Type::Unit,
-        }
+        Expr::Unit { id: b.id, ty: Type::Unit }
     }
 }
