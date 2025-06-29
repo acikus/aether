@@ -8,40 +8,80 @@ fn gen_constraints(expr: &ast::Expr, cx: &mut InferCtx) -> TvOrTy {
     match expr {
         Int(_) => {
             let tv = cx.fresh(Span::default());
-            cx.constraints.push_back(Constraint::Eq(tv.clone(), TvOrTy::Ty(Ty::Int)));
+            cx.constraints.push_back(Constraint {
+                left: tv.clone(),
+                right: TvOrTy::Ty(Ty::Int),
+                left_span: Span::default(),
+                right_span: Span::default(),
+            });
             tv
         }
         Float(_) => {
             let tv = cx.fresh(Span::default());
-            cx.constraints.push_back(Constraint::Eq(tv.clone(), TvOrTy::Ty(Ty::Float)));
+            cx.constraints.push_back(Constraint {
+                left: tv.clone(),
+                right: TvOrTy::Ty(Ty::Float),
+                left_span: Span::default(),
+                right_span: Span::default(),
+            });
             tv
         }
         Bool(_) => {
             let tv = cx.fresh(Span::default());
-            cx.constraints.push_back(Constraint::Eq(tv.clone(), TvOrTy::Ty(Ty::Bool)));
+            cx.constraints.push_back(Constraint {
+                left: tv.clone(),
+                right: TvOrTy::Ty(Ty::Bool),
+                left_span: Span::default(),
+                right_span: Span::default(),
+            });
             tv
         }
         Str(_) => {
             let tv = cx.fresh(Span::default());
-            cx.constraints.push_back(Constraint::Eq(tv.clone(), TvOrTy::Ty(Ty::Str)));
+            cx.constraints.push_back(Constraint {
+                left: tv.clone(),
+                right: TvOrTy::Ty(Ty::Str),
+                left_span: Span::default(),
+                right_span: Span::default(),
+            });
             tv
         }
         Unit => {
             let tv = cx.fresh(Span::default());
-            cx.constraints.push_back(Constraint::Eq(tv.clone(), TvOrTy::Ty(Ty::Unit)));
+            cx.constraints.push_back(Constraint {
+                left: tv.clone(),
+                right: TvOrTy::Ty(Ty::Unit),
+                left_span: Span::default(),
+                right_span: Span::default(),
+            });
             tv
         }
         Binary { op, lhs, rhs } => {
             let l = gen_constraints(lhs, cx);
             let r = gen_constraints(rhs, cx);
             let res = cx.fresh(Span::default());
-            cx.constraints.push_back(Constraint::Eq(l.clone(), r.clone()));
+            cx.constraints.push_back(Constraint {
+                left: l.clone(),
+                right: r.clone(),
+                left_span: Span::default(),
+                right_span: Span::default(),
+            });
             match op {
                 BinOp::Plus | BinOp::Minus | BinOp::Star | BinOp::Slash => {
-                    cx.constraints.push_back(Constraint::Eq(res.clone(), l));
+                    cx.constraints.push_back(Constraint {
+                        left: res.clone(),
+                        right: l,
+                        left_span: Span::default(),
+                        right_span: Span::default(),
+                    });
                 }
                 BinOp::EqEq | BinOp::NotEq | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                    cx.constraints.push_back(Constraint::Eq(res.clone(), TvOrTy::Ty(Ty::Bool)));
+                    cx.constraints.push_back(Constraint {
+                        left: res.clone(),
+                        right: TvOrTy::Ty(Ty::Bool),
+                        left_span: Span::default(),
+                        right_span: Span::default(),
+                    });
                 }
                 _ => {}
             }
@@ -55,7 +95,10 @@ fn gen_constraints(expr: &ast::Expr, cx: &mut InferCtx) -> TvOrTy {
 pub fn infer_expr(expr: &ast::Expr) -> Result<Ty, String> {
     let mut cx = InferCtx::new();
     let root = gen_constraints(expr, &mut cx);
-    cx.solve()?;
+    cx.solve();
+    if !cx.errors.is_empty() {
+        return Err("type error".to_string());
+    }
     match cx.apply(root) {
         TvOrTy::Ty(t) => Ok(t),
         TvOrTy::Var(_) => Err("cannot infer type".to_string()),
