@@ -36,3 +36,20 @@ impl fmt::Debug for Type {
         }
     }
 }
+
+impl Type {
+    /// Attempt to unify two types. Int and Float unify to Float.
+    pub fn unify(a: &Type, b: &Type) -> Result<Type, ()> {
+        use Type::*;
+        match (a, b) {
+            (Int, Float) | (Float, Int) => Ok(Float),
+            (Int, Int) => Ok(Int),
+            (Float, Float) => Ok(Float),
+            (Bool, Bool) => Ok(Bool),
+            (Str, Str) => Ok(Str),
+            (Unit, Unit) => Ok(Unit),
+            (Custom(x), Custom(y)) if x == y => Ok(Custom(x.clone())),
+            _ => Err(()),
+        }
+    }
+}

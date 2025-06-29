@@ -84,10 +84,12 @@ impl Cx {
     }
 
     /// Check if a value of `actual` type can be implicitly converted to
-    /// `expected`. Currently the only allowed implicit conversion is
-    /// Int → Float.
+    /// `expected`. Currently this only allows Int to be promoted to Float.
     fn compatible(&self, expected: &Type, actual: &Type) -> bool {
-        expected == actual || (expected == &Type::Float && actual == &Type::Int)
+        if expected == actual {
+            return true;
+        }
+        matches!(Type::unify(expected, actual), Ok(Type::Float)) && *expected == Type::Float
     }
 
     /*──────── type lookup ───────*/
@@ -342,27 +344,24 @@ impl Cx {
                 let l = self.lower_expr(lhs)?;
                 let r = self.lower_expr(rhs)?;
                 let ty = match op {
-                    // арифметика - now supports mixed Int/Float operations
+                    // арифметика - use unify with numeric promotion
                     ast::BinOp::Plus
                     | ast::BinOp::Minus
                     | ast::BinOp::Star
                     | ast::BinOp::Slash
-                    | ast::BinOp::Percent => {
-                        match (l.ty(), r.ty()) {
-                            (Type::Int, Type::Int) => Type::Int,
-                            (Type::Float, Type::Float) => Type::Float,
-                            (Type::Int, Type::Float) | (Type::Float, Type::Int) => Type::Float, // Mixed operations promote to Float
-                            _ => {
-                                return Err(ResolveError {
-                                    span: Span::default(),
-                                    msg: format!(
-                                        "cannot apply {:?} to types `{:?}` and `{:?}`",
-                                        op,
-                                        l.ty(),
-                                        r.ty()
-                                    ),
-                                });
-                            }
+                    | ast::BinOp::Percent => match Type::unify(l.ty(), r.ty()) {
+                        Ok(Type::Int) => Type::Int,
+                        Ok(Type::Float) => Type::Float,
+                        _ => {
+                            return Err(ResolveError {
+                                span: Span::default(),
+                                msg: format!(
+                                    "cannot apply {:?} to types `{:?}` and `{:?}`",
+                                    op,
+                                    l.ty(),
+                                    r.ty()
+                                ),
+                            });
                         }
                     }
 
@@ -381,31 +380,25 @@ impl Cx {
                             });
                         }
                     }
-                    // сравнение - now supports mixed Int/Float comparisons
-                    ast::BinOp::EqEq | ast::BinOp::NotEq => match (l.ty(), r.ty()) {
-                        (Type::Int, Type::Int)
-                        | (Type::Float, Type::Float)
-                        | (Type::Int, Type::Float)
-                        | (Type::Float, Type::Int)
-                        | (Type::Bool, Type::Bool)
-                        | (Type::Str, Type::Str) => Type::Bool,
-                        _ => {
-                            return Err(ResolveError {
-                                span: Span::default(),
-                                msg: format!(
-                                    "cannot compare types `{:?}` and `{:?}`",
-                                    l.ty(),
-                                    r.ty()
-                                ),
-                            });
+                    // сравнение
+                    ast::BinOp::EqEq | ast::BinOp::NotEq => {
+                        match Type::unify(l.ty(), r.ty()) {
+                            Ok(Type::Int) | Ok(Type::Float) | Ok(Type::Bool) | Ok(Type::Str) => Type::Bool,
+                            _ => {
+                                return Err(ResolveError {
+                                    span: Span::default(),
+                                    msg: format!(
+                                        "cannot compare types `{:?}` and `{:?}`",
+                                        l.ty(),
+                                        r.ty()
+                                    ),
+                                });
+                            }
                         }
-                    },
+                    }
                     ast::BinOp::Lt | ast::BinOp::Le | ast::BinOp::Gt | ast::BinOp::Ge => {
-                        match (l.ty(), r.ty()) {
-                            (Type::Int, Type::Int)
-                            | (Type::Float, Type::Float)
-                            | (Type::Int, Type::Float)
-                            | (Type::Float, Type::Int) => Type::Bool,
+                        match Type::unify(l.ty(), r.ty()) {
+                            Ok(Type::Int) | Ok(Type::Float) => Type::Bool,
                             _ => {
                                 return Err(ResolveError {
                                     span: Span::default(),
