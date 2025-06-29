@@ -58,18 +58,21 @@ impl<'ctx> LlvmCtx<'ctx> {
                 .i8_type()
                 .ptr_type(AddressSpace::Generic)
                 .into(),
-            MirType::Unit => self.context.void_type().into(),
+            MirType::Unit => unreachable!("unit type has no LLVM equivalent"),
         }
     }
 }
 
 pub fn codegen_fn<'ctx>(llcx: &mut LlvmCtx<'ctx>, name: &str, mir: &MirBody) {
-    let ret_ty = llcx.ll_ty(&mir.ret_ty);
-    let fn_ty = match ret_ty {
-        BasicTypeEnum::VoidType(v) => v.fn_type(&[], false),
-        _ => ret_ty.fn_type(&[], false),
+    let func = match mir.ret_ty {
+        MirType::Unit => llcx
+            .module
+            .add_function(name, llcx.context.void_type().fn_type(&[], false), None),
+        _ => {
+            let ret_ty = llcx.ll_ty(&mir.ret_ty);
+            llcx.module.add_function(name, ret_ty.fn_type(&[], false), None)
+        }
     };
-    let func = llcx.module.add_function(name, fn_ty, None);
 
     let entry_bb = llcx.context.append_basic_block(func, "bb0");
     llcx.builder.position_at_end(entry_bb);
