@@ -76,6 +76,7 @@ pub enum Expr {
     Int(i64),
     Float(f64),
     Bool(bool),
+    Unit,
     Str(String),
     Call {
         callee: Box<Expr>,

@@ -244,6 +244,10 @@ impl Cx {
                 value: *b,
                 ty: Type::Bool,
             },
+            Unit => hir::Expr::Unit {
+                id,
+                ty: Type::Unit,
+            },
             Str(s) => hir::Expr::Str {
                 id,
                 value: s.clone(),
