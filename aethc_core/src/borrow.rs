@@ -19,10 +19,10 @@ pub type BorrowId = u32;
 pub type VarStates = HashMap<VarId, BorrowState>;
 
 pub struct BorrowCtx<'hir> {
-    states: VarStates,
-    errors: Vec<BorrowError>,
-    hir: &'hir hir::Block,
-    next_borrow_id: BorrowId,
+    pub states: VarStates,
+    pub errors: Vec<BorrowError>,
+    pub hir: &'hir hir::Block,
+    pub next_borrow_id: BorrowId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,8 +33,18 @@ pub enum BorrowErrorKind {
     DoubleMove,
 }
 
+impl BorrowErrorKind {
+    pub fn code(&self) -> &'static str {
+        match self {
+            BorrowErrorKind::AssignWhileBorrowed | BorrowErrorKind::SecondMutBorrow => "E010",
+            BorrowErrorKind::UseAfterMove | BorrowErrorKind::DoubleMove => "E011",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BorrowError {
+    pub code: &'static str,
     pub kind: BorrowErrorKind,
     pub span: Span,
     pub prev_span: Span,
@@ -66,8 +76,10 @@ impl<'hir> BorrowCtx<'hir> {
             }
             Stmt::Assign { id, expr, .. } => {
                 if matches!(self.states.get(id), Some(BorrowState::MutBorrowed(_))) {
+                    let kind = BorrowErrorKind::AssignWhileBorrowed;
                     self.errors.push(BorrowError {
-                        kind: BorrowErrorKind::AssignWhileBorrowed,
+                        code: kind.code(),
+                        kind,
                         span: Span::default(),
                         prev_span: Span::default(),
                     });
@@ -113,10 +125,11 @@ impl<'hir> BorrowCtx<'hir> {
         }
     }
 
-    fn use_var(&mut self, id: VarId) {
+    pub fn use_var(&mut self, id: VarId) {
         if let Some(state) = self.states.get(&id) {
             if let BorrowState::Moved = state {
                 self.errors.push(BorrowError {
+                    code: BorrowErrorKind::UseAfterMove.code(),
                     kind: BorrowErrorKind::UseAfterMove,
                     span: Span::default(),
                     prev_span: Span::default(),
@@ -125,26 +138,62 @@ impl<'hir> BorrowCtx<'hir> {
         }
     }
 
-    fn move_var(&mut self, id: VarId) {
+    pub fn move_var(&mut self, id: VarId) {
         if let Some(state) = self.states.get(&id) {
             match state {
-                BorrowState::MutBorrowed(_) => self.errors.push(BorrowError {
-                    kind: BorrowErrorKind::AssignWhileBorrowed,
-                    span: Span::default(),
-                    prev_span: Span::default(),
-                }),
-                BorrowState::Moved => self.errors.push(BorrowError {
-                    kind: BorrowErrorKind::DoubleMove,
-                    span: Span::default(),
-                    prev_span: Span::default(),
-                }),
+                BorrowState::MutBorrowed(_) => {
+                    let kind = BorrowErrorKind::AssignWhileBorrowed;
+                    self.errors.push(BorrowError {
+                        code: kind.code(),
+                        kind,
+                        span: Span::default(),
+                        prev_span: Span::default(),
+                    })
+                }
+                BorrowState::Moved => {
+                    let kind = BorrowErrorKind::DoubleMove;
+                    self.errors.push(BorrowError {
+                        code: kind.code(),
+                        kind,
+                        span: Span::default(),
+                        prev_span: Span::default(),
+                    })
+                }
                 _ => {}
             }
         }
         self.states.insert(id, BorrowState::Moved);
     }
 
-    fn cleanup(&mut self) {
+    pub fn borrow_var(&mut self, id: VarId) {
+        if let Some(state) = self.states.get(&id) {
+            match state {
+                BorrowState::MutBorrowed(_) => {
+                    let kind = BorrowErrorKind::SecondMutBorrow;
+                    self.errors.push(BorrowError {
+                        code: kind.code(),
+                        kind,
+                        span: Span::default(),
+                        prev_span: Span::default(),
+                    });
+                }
+                BorrowState::Moved => {
+                    let kind = BorrowErrorKind::UseAfterMove;
+                    self.errors.push(BorrowError {
+                        code: kind.code(),
+                        kind,
+                        span: Span::default(),
+                        prev_span: Span::default(),
+                    });
+                }
+                _ => {}
+            }
+        }
+        self.states.insert(id, BorrowState::MutBorrowed(self.next_borrow_id));
+        self.next_borrow_id += 1;
+    }
+
+    pub fn cleanup(&mut self) {
         for state in self.states.values_mut() {
             if matches!(state, BorrowState::MutBorrowed(_)) {
                 *state = BorrowState::Live;
