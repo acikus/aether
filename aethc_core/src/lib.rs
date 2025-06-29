@@ -9,3 +9,4 @@ pub mod borrow;
 pub mod infer_ctx;
 pub mod type_inference;
 pub mod test_harness;
+pub mod mir;
