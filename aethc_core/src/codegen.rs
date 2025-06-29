@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
 use inkwell::{
+    AddressSpace,
     builder::Builder,
     context::Context,
     module::Module,
-    types::{BasicTypeEnum},
+    types::BasicTypeEnum,
     values::{BasicValueEnum, FunctionValue},
-    AddressSpace,
 };
 
+use crate::hir::BinOp;
 use crate::mir::{
-    BasicBlock, BinOp, Constant, MirBody, MirType, Operand, Rvalue, Statement,
-    Terminator, TempId, RET_TEMP,
+    BasicBlock, Constant, MirBody, MirType, Operand, RET_TEMP, Rvalue, Statement, TempId,
+    Terminator,
 };
-
 pub struct LlvmCtx<'ctx> {
     pub context: Context,
     pub module: Module<'ctx>,
@@ -76,7 +76,14 @@ pub fn codegen_fn<'ctx>(llcx: &mut LlvmCtx<'ctx>, name: &str, mir: &MirBody) {
 
     let mut temps: HashMap<TempId, BasicValueEnum<'ctx>> = HashMap::new();
 
-    lower_block(llcx, &mir.blocks[0], func, &mut temps, &mir.blocks, &mir.ret_ty);
+    lower_block(
+        llcx,
+        &mir.blocks[0],
+        func,
+        &mut temps,
+        &mir.blocks,
+        &mir.ret_ty,
+    );
 }
 
 fn get_or_create_bb<'ctx>(
@@ -95,7 +102,9 @@ fn get_or_create_bb<'ctx>(
 fn succ_blocks(term: &Terminator) -> Vec<u32> {
     match term {
         Terminator::Goto(id) => vec![*id],
-        Terminator::CondBranch { then_bb, else_bb, .. } => vec![*then_bb, *else_bb],
+        Terminator::CondBranch {
+            then_bb, else_bb, ..
+        } => vec![*then_bb, *else_bb],
         _ => Vec::new(),
     }
 }
@@ -139,8 +148,7 @@ fn lower_block<'ctx>(
             let cond_val = lower_operand(llcx, cond, temps).into_int_value();
             let then_ll = get_or_create_bb(llcx, func, *then_bb);
             let else_ll = get_or_create_bb(llcx, func, *else_bb);
-            llcx
-                .builder
+            llcx.builder
                 .build_conditional_branch(cond_val, then_ll, else_ll);
         }
     }
@@ -151,7 +159,9 @@ fn lower_block<'ctx>(
             .iter()
             .any(|b| b.get_name().to_str() == Ok(format!("bb{}", succ)))
         {
-            let new_bb = llcx.context.append_basic_block(func, &format!("bb{}", succ));
+            let new_bb = llcx
+                .context
+                .append_basic_block(func, &format!("bb{}", succ));
             llcx.builder.position_at_end(new_bb);
             lower_block(llcx, &all[succ as usize], func, temps, all, ret_ty);
         }
@@ -165,17 +175,9 @@ fn lower_operand<'ctx>(
 ) -> BasicValueEnum<'ctx> {
     match op {
         Operand::Const(c) => match c {
-            Constant::Int(i) => llcx
-                .context
-                .i32_type()
-                .const_int(*i as u64, true)
-                .into(),
+            Constant::Int(i) => llcx.context.i32_type().const_int(*i as u64, true).into(),
             Constant::Float(f) => llcx.context.f64_type().const_float(*f).into(),
-            Constant::Bool(b) => llcx
-                .context
-                .bool_type()
-                .const_int(*b as u64, false)
-                .into(),
+            Constant::Bool(b) => llcx.context.bool_type().const_int(*b as u64, false).into(),
             Constant::Str(s) => {
                 let gv = llcx
                     .builder
@@ -206,8 +208,7 @@ fn lower_rvalue<'ctx>(
                 BinOp::Plus => {
                     if l.is_float_value() || r.is_float_value() {
                         let l_val = if l.is_int_value() {
-                            llcx
-                                .builder
+                            llcx.builder
                                 .build_signed_int_to_float(
                                     l.into_int_value(),
                                     llcx.context.f64_type(),
@@ -218,8 +219,7 @@ fn lower_rvalue<'ctx>(
                             l
                         };
                         let r_val = if r.is_int_value() {
-                            llcx
-                                .builder
+                            llcx.builder
                                 .build_signed_int_to_float(
                                     r.into_int_value(),
                                     llcx.context.f64_type(),
@@ -229,8 +229,7 @@ fn lower_rvalue<'ctx>(
                         } else {
                             r
                         };
-                        llcx
-                            .builder
+                        llcx.builder
                             .build_float_add(
                                 l_val.into_float_value(),
                                 r_val.into_float_value(),
@@ -238,13 +237,8 @@ fn lower_rvalue<'ctx>(
                             )
                             .into()
                     } else {
-                        llcx
-                            .builder
-                            .build_int_add(
-                                l.into_int_value(),
-                                r.into_int_value(),
-                                "iaddtmp",
-                            )
+                        llcx.builder
+                            .build_int_add(l.into_int_value(), r.into_int_value(), "iaddtmp")
                             .into()
                     }
                 }
