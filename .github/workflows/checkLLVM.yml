@@ -1,0 +1,11 @@
+- name: Debug LLVM installation
+  shell: pwsh
+  run: |
+    Write-Host "LLVM_PATH = $Env:LLVM_PATH"
+    Write-Host "Checking if LLVM directory exists:"
+    Test-Path "$Env:LLVM_PATH" | Write-Host
+    Write-Host "Contents of LLVM directory:"
+    if (Test-Path "$Env:LLVM_PATH") {
+      Get-ChildItem "$Env:LLVM_PATH" -Recurse -Name "llvm-config*" | Write-Host
+      Get-ChildItem "$Env:LLVM_PATH\bin" -ErrorAction SilentlyContinue | Write-Host
+    }
