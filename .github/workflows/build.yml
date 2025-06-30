@@ -17,16 +17,19 @@ jobs:
       - name: Install Rust toolchain (stable-MSVC)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install LLVM 16 (with llvm-config) into C:\llvm
+      - name: Ensure clean LLVM 16 install in C:\llvm
         shell: pwsh
         run: |
-          # Install to a custom dir without spaces
-          choco install llvm --version=16.0.6 -y --params "'/InstallDir:C:\\llvm'"
+          # Ako postoji neka druga verzija LLVM-a, ukloni je (ignoruje grešku ako nije instaliran)
+          choco uninstall llvm -y || Write-Host "No previous LLVM to uninstall"
 
-          # Export for llvm-sys build script
+          # Instaliraj tačno 16.0.6 → folder bez razmaka
+          choco install llvm --version=16.0.6 -y --allow-downgrade --force --params "'/InstallDir:C:\\llvm'"
+
+          # Export za llvm-sys build.rs
           "LLVM_SYS_160_PREFIX=C:\\llvm" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
-          # Put <install>/bin on PATH for subsequent steps
+          # Dodaj bin u PATH za naredne korake
           "C:\\llvm\\bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
 
       # ────────────────────────────────────────────────
