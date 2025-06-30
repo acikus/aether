@@ -9,33 +9,36 @@ jobs:
     runs-on: windows-latest
     steps:
       # ────────────────────────────────────────────────
-      # Source code & toolchains
+      # Source code & Rust toolchain
       # ────────────────────────────────────────────────
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain (stable-MSVC)
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Ensure clean LLVM 16 install in C:\llvm
+      # ────────────────────────────────────────────────
+      # Compile & cache LLVM 16 with llvm-config
+      # https://github.com/rush-lang/setup-llvm-action
+      # ────────────────────────────────────────────────
+      - name: Build LLVM 16 + cache
+        id: llvm
+        uses: rush-lang/setup-llvm-action@v1
+        with:
+          llvm-version: "16.0.6"
+          install-prefix: "C:/llvm16" # no spaces; lightning-fast look-ups
+          projects: "clang;lld"      # C API + linker, minimal extras
+          targets: "X86"             # we only need host target
+
+      # Export prefix for llvm-sys and put bin on PATH
+      - name: Export LLVM env vars
         shell: pwsh
         run: |
-          # Ako postoji neka druga verzija LLVM-a, ukloni je (ignoruje grešku ako nije instaliran)
-          choco uninstall llvm -y || Write-Host "No previous LLVM to uninstall"
-
-          # Instaliraj tačno 16.0.6 → folder bez razmaka
-          choco install llvm --version=16.0.6 -y --allow-downgrade --force --params "'/InstallDir:C:\\llvm'"
-
-          # Export za llvm-sys build.rs
-          "LLVM_SYS_160_PREFIX=C:\\llvm" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-
-          # Dodaj bin u PATH za naredne korake
-          "C:\\llvm\\bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          "LLVM_SYS_160_PREFIX=${{ steps.llvm.outputs.install-prefix }}" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "${{ steps.llvm.outputs.install-prefix }}\bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
 
       # ────────────────────────────────────────────────
       # Sanity checks
       # ────────────────────────────────────────────────
-      - name: Check tool versions & env
+      - name: Tool versions & env
         shell: pwsh
         run: |
           rustc --version
@@ -47,26 +50,20 @@ jobs:
       # ────────────────────────────────────────────────
       # Build & test
       # ────────────────────────────────────────────────
-      - name: Show project manifest (first 20 entries)
-        shell: pwsh
-        run: |
-          dir | select -First 20
-          type Cargo.toml
-
-      - name: Build project
+      - name: Cargo build
         run: cargo build --release --verbose
 
-      - name: Run tests
+      - name: Cargo test
         run: cargo test --release --verbose
 
       # ────────────────────────────────────────────────
       # Artifacts
       # ────────────────────────────────────────────────
-      - name: List built files
+      - name: List release files
         shell: pwsh
         run: dir target\release
 
-      - name: Upload executable(s)
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
