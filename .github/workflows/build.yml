@@ -8,36 +8,39 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      # ────────────────────────────────────────────────
-      # Source code & Rust toolchain
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
+      # Source & Rust toolchain
+      # ──────────────────────────────────────────────
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # ────────────────────────────────────────────────
-      # Compile & cache LLVM 16 with llvm-config
-      # https://github.com/rush-lang/setup-llvm-action
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
+      # Build LLVM 16 + cache (includes llvm-config)
+      # ──────────────────────────────────────────────
       - name: Build LLVM 16 + cache
-        id: llvm
         uses: rush-lang/setup-llvm-action@v1
         with:
           llvm-version: "16.0.6"
-          install-prefix: "C:/llvm16" # no spaces; lightning-fast look-ups
-          projects: "clang;lld"      # C API + linker, minimal extras
-          targets: "X86"             # we only need host target
+          install-prefix: "C:/llvm16"   # no spaces
+          projects: "clang;lld"
+          targets: "X86"
 
-      # Export prefix for llvm-sys and put bin on PATH
+      # ──────────────────────────────────────────────
+      # Export env vars for llvm‑sys & PATH
+      # ──────────────────────────────────────────────
       - name: Export LLVM env vars
         shell: pwsh
         run: |
-          "LLVM_SYS_160_PREFIX=${{ steps.llvm.outputs.install-prefix }}" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          "${{ steps.llvm.outputs.install-prefix }}\bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "LLVM_PATH from action = $Env:LLVM_PATH"
+          # llvm-sys expects this
+          "LLVM_SYS_160_PREFIX=$Env:LLVM_PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          # ensure llvm-config is on PATH
+          "$Env:LLVM_PATH\bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
 
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
       # Sanity checks
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
       - name: Tool versions & env
         shell: pwsh
         run: |
@@ -47,18 +50,18 @@ jobs:
           llvm-config --version
           clang --version
 
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
       # Build & test
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
       - name: Cargo build
         run: cargo build --release --verbose
 
       - name: Cargo test
         run: cargo test --release --verbose
 
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
       # Artifacts
-      # ────────────────────────────────────────────────
+      # ──────────────────────────────────────────────
       - name: List release files
         shell: pwsh
         run: dir target\release
