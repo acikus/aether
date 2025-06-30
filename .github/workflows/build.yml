@@ -14,11 +14,28 @@ jobs:
       
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+      
+    - name: Install LLVM 16
+      run: |
+        $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.6/LLVM-16.0.6-win64.exe"
+        $output = "llvm-installer.exe"
+        Invoke-WebRequest -Uri $url -OutFile $output
+        Start-Process -FilePath $output -ArgumentList "/S" -Wait
+        
+    - name: Set LLVM environment variables
+      run: |
+        echo "LLVM_SYS_160_PREFIX=C:\Program Files\LLVM" >> $env:GITHUB_ENV
+        echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
         
     - name: Check Rust version
       run: |
         rustc --version
         cargo --version
+        
+    - name: Verify LLVM installation
+      run: |
+        llvm-config --version
+        echo "LLVM_SYS_160_PREFIX: $env:LLVM_SYS_160_PREFIX"
         
     - name: Check project structure
       run: |
