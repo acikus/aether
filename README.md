@@ -42,3 +42,7 @@ cargo build --release
 cargo run -p aethc_cli -- parse path/to/file.aeth
 ```
 
+
+## Routing Service
+
+See [`routing_service/`](routing_service/) for a simple Flask application that proxies requests to a Valhalla server.
